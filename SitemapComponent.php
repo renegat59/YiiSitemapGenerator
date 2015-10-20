@@ -69,6 +69,19 @@ class SitemapComponent extends CApplicationComponent {
 	public $changefreq = 'weekly';
 
 	/**
+	* If set to <b>FALSE</b>, date of last modification will be set to current date.
+	* If set to <b>TRUE</b>, the script will try to get last modification from the server.
+	* @var boolean
+	*/
+	public $lastModFromServer = true;
+
+	/**
+	* Determines wether we should add <b>lastmod</b> tag in the sitemap
+	* @var boolean
+	*/
+	public $addLastmod = true;
+
+	/**
 	 * Here we'll collect the sitemap links
 	 * @var SitemapLink[]
 	 */
@@ -80,8 +93,6 @@ class SitemapComponent extends CApplicationComponent {
 	 */
 	private $waitingLinks = array();
 
-	private $pageHtml;
-
 	private $configChecked = false;
 
 	const SITEMAP_HEADER = '<?xml version="1.0" encoding="UTF-8"?>
@@ -89,6 +100,7 @@ class SitemapComponent extends CApplicationComponent {
 		xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
 		xsi:schemaLocation="http://www.sitemaps.org/schemas/sitemap/0.9
 		http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd">';
+	const FILETIME = 'FILETIME';
 
 	public function init() {
 		parent::init();
@@ -111,9 +123,8 @@ class SitemapComponent extends CApplicationComponent {
 		$sitemapContent = self::SITEMAP_HEADER."\r\n";
 		foreach ($this->visitedLinks as $sitemapLink){
 			$sitemapContent .= '<url>'
-				. '<loc>'
-				. $sitemapLink->url
-				. '</loc>'
+				. '<loc>'.$this->escapeUrl($sitemapLink->url).'</loc>'
+				. $this->getLastMod($sitemapLink)
 				. '<changefreq>'.$this->changefreq.'</changefreq>'
 				. '<priority>'.number_format($sitemapLink->priority, 2).'</priority>'
 				. '</url>'."\r\n";
@@ -149,13 +160,15 @@ class SitemapComponent extends CApplicationComponent {
 			return;
 		}
 
-		//we assign it to class field to save memory:
-		$this->pageHtml = $this->getSite($sitemapLink->url);
-		if($this->pageHtml !== null){
-			$dom = str_get_html($this->pageHtml);
+		$fileinfo = array();
+
+		$pageHtml = $this->getSite($sitemapLink->url, $fileinfo);
+		if($pageHtml !== null){
+			$dom = str_get_html($pageHtml);
 			if($dom !== null) {
-				//set as visited, add to sitemap:
-				$this->visit($sitemapLink->url);
+				//set as visited, add to sitemap, set lastmod:
+				$lastmod = $fileinfo[self::FILETIME] !== -1 ? date('c', $fileinfo[self::FILETIME]) : null;
+				$this->visit($sitemapLink->url, $lastmod);
 				//and check for another links:
 				$links = $dom->find('a');
 				foreach($links as $link){
@@ -195,11 +208,12 @@ class SitemapComponent extends CApplicationComponent {
 	 * Moves the link from waiting links to visited links
 	 * @param string $link
 	 */
-	private function visit($link){
+	private function visit($link, $lastmod=null){
 		if(isset($this->waitingLinks[$link])){
 			$sitemapLink = $this->waitingLinks[$link];
 			unset($this->waitingLinks[$link]);
 			if(!isset($this->visitedLinks[$link])){
+				$sitemapLink->lastmod = $lastmod;
 				$this->visitedLinks[$link] = $sitemapLink;
 			}
 		}
@@ -287,20 +301,45 @@ class SitemapComponent extends CApplicationComponent {
 		return strtolower(rtrim($cleanUrl, '#/'));
 	}
 
-	private function getSite($url){
+	private function getSite($url, &$fileinfo=array()){
 		$ch = curl_init();
 		curl_setopt($ch, CURLOPT_URL, $url);
 		curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-		curl_setopt($ch, CURLOPT_HEADER, 0);
+		curl_setopt($ch, CURLOPT_HEADER, TRUE);
 		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
 		curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
 		curl_setopt($ch, CURLOPT_TIMEOUT, 120);
 		curl_setopt($ch, CURLOPT_USERAGENT,'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.17 (KHTML, like Gecko) Chrome/24.0.1312.52 Safari/537.17');
 		curl_setopt($ch, CURLOPT_AUTOREFERER, true);
 		curl_setopt($ch, CURLOPT_FOLLOWLOCATION, 1);
+		curl_setopt($ch, CURLOPT_FILETIME, TRUE);
 		$data = curl_exec($ch);
+
+		if($this->addLastmod && $this->lastModFromServer){
+			$filetime = curl_getinfo($ch, CURLINFO_FILETIME);
+			$fileinfo[self::FILETIME] = $filetime;
+		}
 		curl_close($ch);
 		return $data === FALSE ? null : $data;
+	}
+
+	private function getLastMod($sitemapLink){
+		if($this->addLastmod == false || $sitemapLink == null){
+			return '';
+		}
+		if($sitemapLink->lastmod !== null && $this->lastModFromServer){
+			return '<lastmod>'.$sitemapLink->lastmod.'</lastmod>';
+		} else {
+			return '<lastmod>'.date('c').'</lastmod>';
+		}
+	}
+
+	private function escapeUrl($url){
+		//remove special chars
+		$url = str_replace(array("%3A", "%2F", "%23"),array(":", "/","#"), $url);
+		//and URL encode for XML 1.0
+		$url = htmlspecialchars($url, ENT_QUOTES|ENT_XML1);
+		return $url;
 	}
 
 	private function checkConfig(){
@@ -323,6 +362,7 @@ class SitemapLink {
 	public $url;
 	public $priority;
 	public $level;
+	public $lastmod;
 
 	public function __construct($url, $level, $priority=1){
 		$this->url = $url;

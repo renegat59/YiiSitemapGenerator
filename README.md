@@ -2,9 +2,10 @@
 The project brings the sitemap generator based on the website crawler.
 It is made for Yii 1.1.x. Was not tested and not intended to work on 2.x
 It is related on PHP Simple HTML DOM Parser (http://simplehtmldom.sourceforge.net/)
+More about sitemaps: http://www.sitemaps.org/protocol.html
 
 # How To use
-To use the generator simply add the SitemapCommand.php to your protected/components
+To use the generator, add the SitemapComponent.php to your protected/components
 Copy the php-dom folder to protected/vendors (or download the newest version from the project website).
 Add configuration following in the protected/config/console.php:
 
@@ -20,7 +21,16 @@ Add configuration following in the protected/config/console.php:
     ),
 ```
 
+To run the sitemap generation run:
+
+```php
+  Yii::app()->sitemap->generateSitemap();
+```
+
+
 The parameters are explained in the comments in the code. The sample configuration file and command is attached with the project.
 
 # TODO
-Add the last modification date to the sitemap.
+~~Add the last modification date to the sitemap.~~
+~~Add urlencoding~~
+~~Add Escapes of characters: & ' " < >~~
