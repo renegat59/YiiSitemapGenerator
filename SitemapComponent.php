@@ -362,7 +362,6 @@ class SitemapLink {
 	public $url;
 	public $priority;
 	public $level;
-	public $lastmod;
 
 	public function __construct($url, $level, $priority=1){
 		$this->url = $url;
