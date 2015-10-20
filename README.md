@@ -32,5 +32,7 @@ The parameters are explained in the comments in the code. The sample configurati
 
 # TODO
 ~~Add the last modification date to the sitemap.~~
+
 ~~Add urlencoding~~
-~~Add Escapes of characters: & ' " < >~~ 
+
+~~Add Escapes of characters: & ' " < >~~
